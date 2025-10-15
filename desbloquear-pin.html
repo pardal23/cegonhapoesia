@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Desbloqueio de PIN</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 50px; }
+    button { padding: 10px 15px; margin-top: 10px; margin-right: 10px; }
+    .message { margin-top: 20px; font-weight: bold; }
+    input[type="password"], input[type="text"], input[type="email"] {
+      padding: 5px;
+      font-size: 16px;
+      width: 250px;
+    }
+    h1.red { color: red; }
+  </style>
+</head>
+<body>
+  <h1 class="red">Instruções</h1>
+  <ul>
+    <li>Mudar PIN no site</li>
+    <li>Salvar PIN</li>
+    <li>Salvar HTML no site</li>
+    <li>Pesquisar sempre como: <code>------12</code> ou <code>-------56</code>, etc.</li>
+  </ul>
+
+  <h2>Desbloqueio de PIN</h2>
+
+  <label for="pinInput">PIN Atual:</label><br>
+  <input type="password" id="pinInput" value="M23*"><br><br>
+
+  <label for="email">Email (opcional para envio):</label><br>
+  <input type="email" id="email" placeholder="Digite o seu email"><br><br>
+
+  <h3>Ações</h3>
+  <button onclick="desbloquearPin()">Desbloquear PIN</button>
+  <button onclick="limparPin()">Limpar PIN Salvo</button>
+  <button onclick="salvarNovoPin()">Salvar Novo PIN</button>
+  <button onclick="baixarHtmlComNovoPin()">Baixar HTML com Novo PIN</button>
+  <button onclick="enviarPinParaServidor()">Enviar PIN para o Servidor</button>
+
+  <div class="message" id="message"></div>
+
+  <script>
+    const storageKey = 'pinSalvoCriptografado';
+    const chaveSecreta = 'chave-secreta-super123';
+    const servidorUrl = 'https://seu-servidor.com/api/pin'; // Substituir com a URL real
+
+    window.onload = function () {
+      const pinCriptografado = localStorage.getItem(storageKey);
+      if (pinCriptografado) {
+        try {
+          const bytes = CryptoJS.AES.decrypt(pinCriptografado, chaveSecreta);
+          const pinOriginal = bytes.toString(CryptoJS.enc.Utf8);
+          if (pinOriginal) {
+            document.getElementById('pinInput').value = pinOriginal;
+          }
+        } catch (e) {
+          console.error("Erro ao descriptografar PIN:", e);
+        }
+      }
+    };
+
+    function desbloquearPin() {
+      const pin = document.getElementById('pinInput').value.trim();
+      if (!pin) {
+        showMessage('Por favor, digite um PIN.');
+        return;
+      }
+      const pinCriptografado = CryptoJS.AES.encrypt(pin, chaveSecreta).toString();
+      localStorage.setItem(storageKey, pinCriptografado);
+      showMessage('PIN desbloqueado e salvo com sucesso.');
+    }
+
+    function limparPin() {
+      localStorage.removeItem(storageKey);
+      document.getElementById('pinInput').value = 'M23*';
+      showMessage('PIN salvo foi removido.');
+    }
+
+    function salvarNovoPin() {
+      const novoPin = document.getElementById('pinInput').value.trim();
+      if (!novoPin) {
+        showMessage('Por favor, digite um novo PIN para salvar.');
+        return;
+      }
+      const pinCriptografado = CryptoJS.AES.encrypt(novoPin, chaveSecreta).toString();
+      localStorage.setItem(storageKey, pinCriptografado);
+      showMessage('Novo PIN salvo com sucesso.');
+    }
+
+    function baixarHtmlComNovoPin() {
+      const pin = document.getElementById('pinInput').value.trim();
+      if (!pin) {
+        alert("Digite um PIN para salvar no HTML.");
+        return;
+      }
+
+      const safePin = pin.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>PIN Salvo</title>
+        </head>
+        <body>
+          <h1>PIN Salvo</h1>
+          <p>PIN salvo: <strong>${safePin}</strong></p>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'pin_salvo.html';
+      link.click();
+    }
+
+    function enviarPinParaServidor() {
+      const pin = document.getElementById('pinInput').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      if (!pin || !email) {
+        showMessage('Por favor, preencha todos os campos.');
+        return;
+      }
+
+      if (!validateEmail(email)) {
+        showMessage('Por favor, insira um email válido.');
+        return;
+      }
+
+      const pinCriptografado = CryptoJS.AES.encrypt(pin, chaveSecreta).toString();
+
+      fetch(servidorUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          pin: pinCriptografado,
+          email: email
+        })
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("Erro na resposta do servidor");
+        }
+        return response.json();
+      })
+      .then(data => {
+        showMessage('PIN enviado com sucesso!');
+      })
+      .catch(error => {
+        showMessage('Erro ao enviar PIN: ' + error.message);
+      });
+    }
+
+    function showMessage(msg) {
+      document.getElementById('message').innerText = msg;
+    }
+
+    function validateEmail(email) {
+      // Regex simples para validar e-mail
+      const re = /\S+@\S+\.\S+/;
+      return re.test(email);
+    }
+  </script>
+</body>
+</html>
